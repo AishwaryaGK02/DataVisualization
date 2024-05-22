@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clustered Bar Chart</title>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <style>
+        .tooltip {
+            position: absolute;
+            text-align: center;
+            padding: 6px;
+            font: 12px sans-serif;
+            background: lightsteelblue;
+            border: 0px;
+            border-radius: 8px;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div>
+            <label for="countrySelect">Country:</label>
+            <select id="countrySelect"></select>
+        </div>
+        <svg width="960" height="500"></svg>
+    </div>
+    <script>
+        // Set up SVG and margin conventions
+        const margin = { top: 20, right: 20, bottom: 50, left: 70 };
+        const width = 960 - margin.left - margin.right;
+        const height = 500 - margin.top - margin.bottom;
+
+        const svg = d3.select("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        // Set up scales
+        const x0 = d3.scaleBand().range([0, width]).padding(0.1);
+        const x1 = d3.scaleBand().padding(0.05);
+        const y = d3.scaleLinear().range([height, 0]);
+
+        const color = d3.scaleOrdinal()
+            .domain(["Non_Covid", "Covid"])
+            .range(["#98abc5", "#8a89a6"]);
+
+        const xAxis = d3.axisBottom(x0);
+        const yAxis = d3.axisLeft(y).ticks(10).tickFormat(d => d + "%");
+
+        // Tooltip
+        const tooltip = d3.select("body").append("div")
+            .attr("class", "tooltip")
+            .style("opacity", 0);
+
+        // Function to update the chart
+        function updateChart(data, selectedCountry) {
+            const countryData = data.filter(d => d.Country === selectedCountry);
+
+            // Calculate percentages
+            countryData.forEach(d => {
+                const total = +d.Covid + +d.Non_Covid;
+                d.Covid_Percentage = ((+d.Covid / total) * 100).toFixed(2);
+                d.Non_Covid_Percentage = ((+d.Non_Covid / total) * 100).toFixed(2);
+            });
+
+            const years = ["2020", "2021", "2022", "2023"];
+            const categories = ["Covid_Percentage", "Non_Covid_Percentage"];
+
+            x0.domain(years);
+            x1.domain(categories).range([0, x0.bandwidth()]);
+            y.domain([0, 100]);
+
+            svg.selectAll("*").remove();
+
+            svg.append("g")
+                .attr("class", "x axis")
+                .attr("transform", `translate(0,${height})`)
+                .call(xAxis)
+                .append("text")
+                .attr("x", width / 2)
+                .attr("y", 40)
+                .attr("fill", "#000")
+                .attr("text-anchor", "middle")
+                .text("Year");
+
+            svg.append("g")
+                .attr("class", "y axis")
+                .call(yAxis)
+                .append("text")
+                .attr("transform", "rotate(-90)")
+                .attr("x", -height / 2)
+                .attr("y", -50)
+                .attr("fill", "#000")
+                .attr("text-anchor", "middle")
+                .text("Percentage of Deaths");
+
+            const bars = svg.selectAll(".barGroup")
+                .data(countryData)
+                .enter().append("g")
+                .attr("class", "barGroup")
+                .attr("transform", d => `translate(${x0(d.Year)},0)`);
+
+            bars.selectAll("rect")
+                .data(d => categories.map(key => ({ key: key, value: +d[key] })))
+                .enter().append("rect")
+                .attr("x", d => x1(d.key))
+                .attr("y", d => y(d.value))
+                .attr("width", x1.bandwidth())
+                .attr("height", d => height - y(d.value))
+                .attr("fill", d => color(d.key))
+                .on("mouseover", function (event, d) {
+                    const year = d3.select(this.parentNode).datum().Year;
+                    const totalDeaths = d.value;
+                    const label = d.key === "Covid_Percentage" ? "Covid Deaths" : "Non-Covid Deaths";
+
+                    tooltip.transition().duration(200).style("opacity", .9);
+                    tooltip.html(`Year: ${year}<br>${label}: ${totalDeaths}%`)
+                        .style("left", (event.pageX + 5) + "px")
+                        .style("top", (event.pageY - 28) + "px");
+                })
+                .on("mouseout", function () {
+                    tooltip.transition().duration(500).style("opacity", 0);
+                });
+        }
+
+        // Load data from CSV file
+        d3.csv("data.csv").then(data => {
+            const countries = Array.from(new Set(data.map(d => d.Country)));
+
+            // Dropdown for country selection
+            const countrySelect = d3.select("#countrySelect");
+            countries.forEach(country => {
+                countrySelect.append("option").text(country).attr("value", country);
+            });
+
+            // Initial chart
+            updateChart(data, countries[0]);
+
+            // Update chart when new country is selected
+            countrySelect.on("change", function () {
+                const selectedCountry = d3.select(this).property("value");
+                updateChart(data, selectedCountry);
+            });
+        }).catch(error => {
+            console.error('Error loading the CSV data:', error);
+        });
+    </script>
+</body>
+</html>
