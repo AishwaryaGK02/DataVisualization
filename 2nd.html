@@ -129,7 +129,6 @@
         // Load data from CSV file
         d3.csv("data.csv").then(data => {
             const countries = Array.from(new Set(data.map(d => d.Country)));
-
             // Dropdown for country selection
             const countrySelect = d3.select("#countrySelect");
             countries.forEach(country => {
